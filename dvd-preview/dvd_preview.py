@@ -18,6 +18,8 @@ class DVDPreview(AbstractPlugin, QWidget):
 
         self.status = QTextEdit("Nothing here")
         self.dvdpath = QLineEdit()
+        self.dvdpath.setPlaceholderText("dvdpath")
+
         self.open_button = PushButton("Open",clicked=self.dvd_open)
         self.open_title = PushButton("Open Title", clicked=self.dvd_title)
         self.iso = None
@@ -32,21 +34,62 @@ class DVDPreview(AbstractPlugin, QWidget):
         self.chapter_cell_checkbox = CheckBox("Chapters or cells")
         self.chapter_cell_checkbox.setChecked(True)
         self.chapter_cell_checkbox.stateChanged.connect(self.update_notches)
-        
+
         self.title_layout = HBoxLayout([])
+
+
+        self.split_from = FrameEdit()
+        self.split_to = FrameEdit()
+        self.split_audio_idx = FrameEdit()
+        self.split_audio_path = QLineEdit()
+        self.split_audio_path.setPlaceholderText("audio path / json path")
+        self.split_demuxac3 = PushButton("DemuxAc3",clicked=self.btn_split_demux_ac3_clicked)
+        self.split_renderwav = PushButton("RenderWav",clicked=self.btn_split_renderwav_clicked)
+        self.audio_offset_label = QLabel("Audiooffset: 0")
+        self.save_json_button = PushButton("Save Json",clicked=self.dvd_save_json)
 
         VBoxLayout(self, [
             HBoxLayout([
                 self.dvdpath, self.open_button,
             ]),
             HBoxLayout([
-                self.title_num, self.angle_num, self.chapter_cell_checkbox, self.open_title, 
+            QLabel("titlenum"),QLabel("anglenum")
             ]),
+            HBoxLayout([
+                 self.title_num, self.angle_num, self.chapter_cell_checkbox, self.open_title,
+            ]),
+
             self.current_chapter_label,
-            
+
             self.title_layout,
-            self.status
+            self.status,
+
+            HBoxLayout([
+                self.split_audio_path,
+                self.save_json_button,
+            ]),
+            #HBoxLayout([
+            #    QLabel("from"),QLabel("to"),QLabel("audio")
+            #]),
+            HBoxLayout([
+                QLabel("from/to/audioindex"),self.split_from, self.split_to, self.split_audio_idx, self.split_demuxac3, self.split_renderwav
+            ]),
+            self.audio_offset_label
         ])
+
+    def btn_split_renderwav_clicked(self):
+        fromy,toy,audioy = self.split_from.value().value,self.split_to.value().value,self.split_audio_idx.value().value
+        splt = self.title.split_range(fromy,toy,audioy)
+        import vsmuxtools
+        vsmuxtools.audio_async_render(splt.audio,open(self.split_audio_path.text(),"wb"))
+
+    def btn_split_demux_ac3_clicked(self):
+        fromy,toy,audioy = self.split_from.value().value,self.split_to.value().value,self.split_audio_idx.value().value
+        if self.title._audios[audioy].startswith("ac3"):
+            splt = self.title.split_range(fromy,toy,audioy)
+            offst = splt.ac3(self.split_audio_path.text(),audioy)
+            offst = round(offst* 1000 * 10) / 10
+            self.audio_offset_label.setText(f"Offset: {offst} ms")
 
     def dvd_open(self):
         try:
@@ -57,6 +100,12 @@ class DVDPreview(AbstractPlugin, QWidget):
             self.angle_num.setMinimum(1)
         except:
             self.iso = None
+    def dvd_save_json(self):
+        try:
+            import json
+            json.dump(self.iso.json,open(self.split_audio_path.text(),"wt"))
+        except:
+            pass
 
     def dvd_title(self):
         try:
@@ -67,6 +116,12 @@ class DVDPreview(AbstractPlugin, QWidget):
         self.add_output(self.title.video())
 
         self.status.setText(str(self.iso) +"\n\n" + str(self.title))
+
+        self.split_from.setMinimum(1)
+        self.split_from.setMaximum(len(self.title.chapters)-1)
+
+        self.split_to.setMinimum(1)
+        self.split_to.setMaximum(len(self.title.chapters)-1)
 
     def on_current_frame_changed(self, frame: Frame) -> None:
         if self.title is not None:
@@ -120,7 +175,7 @@ class DVDPreview(AbstractPlugin, QWidget):
 
             for i in real_chapts:
                 nchs.add(i, Qt.GlobalColor.magenta)
-        
+
         return nchs
 
     def dragEnterEvent(self, event):
