@@ -12,11 +12,15 @@ def tunable(clip: vs.VideoNode, v: list[int | bool | float], nam: list[str], lm:
     try:
         from vspreview.api import is_preview
         from vspreview.core import main_window
-        assert is_preview()
-        return main_window().plugins["dev.jsaowji.tunables"].tunable(clip, v, nam, lm)
     except:
         return lm(clip, v)
 
+    if is_preview():
+        return main_window().plugins["dev.jsaowji.tunables"].tunable(clip, v, nam, lm)
+    else:
+        return lm(clip, v)
+
+    
 
 def seperator():
     tunable(core.std.BlankClip(width=720, height=480), [0], ["----"], lambda a, b: a)

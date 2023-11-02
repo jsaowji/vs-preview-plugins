@@ -9,62 +9,20 @@ from vspreview.core import HBoxLayout, VBoxLayout, FrameEdit, Stretch, main_wind
 from functools import partial
 from vstools import vs, core
 
-
 __all__ = [
     'Tunables',
 ]
 
-
-def add_switch(asd, name=None):
-    if is_preview():
-        mw = main_window()
-
-        if not hasattr(mw, "tunables"):
-            mw.tunables = []
-            mw.tunables_names = []
-            mw.reload_before_signal.connect(clear_tunables)
-
-        mw.tunables += [asd]
-        if name is None:
-            n2 = [f"{len(mw.tunables)}"] * len(asd)
-        else:
-            n2 = name
-        mw.tunables_names += [n2]
-
-
-def wrap_error(nd, lmbda):
-    try:
-        return lmbda()
-    except:
-        import traceback
-        var = traceback.format_exc()
-        print(var)
-        return nd.std.BlankClip().text.Text(f"{var}")
-
-
-def make_frameval(fna) -> vs.VideoNode:
-    def ina(n, b):
-        try:
-            return b()
-        except:
-            import traceback
-            var = traceback.format_exc()
-            print(var)
-    a = core.std.FrameEval(fna(), partial(ina, b=fna))
-    core.std.SetVideoCache(a, 0)
-    return a
-
-
-def clear_tunables():
-    if is_preview():
-        m = main_window()
-        if hasattr(m, "tunables"):
-            delattr(m, "tunables")
-            delattr(m, "tunables_names")
-
-
 class Tunables(AbstractPlugin, QWidget):
     _config = PluginConfig('dev.jsaowji.tunables', 'Tunables')
+
+    def __init__(self, main) -> None:
+        super().__init__(main)
+
+        self.clear_tunables()
+
+        self.main.reload_before_signal.connect(self.clear_tunables)
+
 
     def setup_ui(self) -> None:
         self.main.reload_after_signal.connect(self.reload_after)
@@ -77,15 +35,16 @@ class Tunables(AbstractPlugin, QWidget):
 
     def update_list(self):
         lst = []
-        for tun, nam in zip(self.main.tunables, self.main.tunables_names):
+        for tun, nam in zip(self.tunables, self.tunables_names):
             for i, a in enumerate(tun):
                 if isinstance(a, bool):
                     fe = QCheckBox()
                     fe.setChecked(a)
 
-                    def asd(a, b, c, d):
+                    def asd(a, b, c, d:Tunables):
                         a[b] = c.isChecked()
-                        d.main.switch_frame(d.main.current_output.last_showed_frame)
+
+                        d.flush_all_caches()
 
                     fna = partial(asd, a=tun, b=i, c=fe, d=self)
                     fe.stateChanged.connect(fna)
@@ -98,10 +57,11 @@ class Tunables(AbstractPlugin, QWidget):
                     fe.setMaximum(100000000)
                     fe.setValue(a)
 
-                    def asd(a, b, c, d):
+                    def asd(a, b, c, d:Tunables):
                         a[b] = int(c.value())
-                        d.main.switch_frame(d.main.current_output.last_showed_frame)
 
+                        d.flush_all_caches()
+               
                     fna = partial(asd, a=tun, b=i, c=fe, d=self)
                     fe.valueChanged.connect(fna)
                     lst += [HBoxLayout([
@@ -115,9 +75,11 @@ class Tunables(AbstractPlugin, QWidget):
                     fe.setSingleStep(0.1)
                     fe.setValue(a)
 
-                    def asd(a, b, c, d):
+                    def asd(a, b, c, d:Tunables):
                         a[b] = c.value()
-                        d.main.switch_frame(d.main.current_output.last_showed_frame)
+
+                        d.flush_all_caches()                            
+                        
 
                     fna = partial(asd, a=tun, b=i, c=fe, d=self)
                     fe.valueChanged.connect(fna)
@@ -137,57 +99,118 @@ class Tunables(AbstractPlugin, QWidget):
         self.scroll.setWidget(self.widget)
 
         VBoxLayout(self, [self.scroll])
+    
+    def flush_all_caches(self):
+        # Does not work
+        from vstools.utils.vs_proxy import clear_cache
+        clear_cache()
+
+        self.main.switch_frame(self.main.current_output.last_showed_frame)
+
+    def clear_tunables(self):
+        self.tunables = []
+        self.tunables_names = []
+        self.tunables_nodes = []
+        self.caches = []
 
     def tunable(self, input_clip: vs.VideoNode, v: list[int | float | bool], nam: list[str], lm: callable[vs.VideoNode, list[int | float | bool]]) -> vs.VideoNode:
-        if is_preview():
-            add_switch(v, nam)
-            if True or (not input_clip.is_inspectable(0)):
-                raw_frameeval = make_frameval(lambda a=input_clip, b=v, we=wrap_error: we(
-                    a, lambda: lm(a, b).text.Text(f"{b}")))
-                core.std.SetVideoCache(raw_frameeval, 0)
+        assert isinstance(v,list)
+        
+        self.tunables += [v]
 
-                return raw_frameeval
-            else:
-                def cache_clips(n, a, b, lm, nam, cache={}):
-                    print(f"{n} for {nam}")
-                    b = tuple(b)
-                    if not b in cache:
-                        rnd = wrap_error(a, lambda: lm(a, b))
-                        core.std.SetVideoCache(rnd, 0)
-                        lel = rnd.text.Text(f"{b}                       ")
-                        core.std.SetVideoCache(lel, 0)
-                        search_for_node(lel, a, 0)
-                        search_for_node(rnd, a, 0)
-                        cache[b] = lel
-                    return cache[b]
-                fanc = partial(cache_clips, a=input_clip, b=v, lm=lm, nam=nam)
-                n0 = fanc(0)
-                cached = core.std.FrameEval(n0, fanc, clip_src=[input_clip])
-                core.std.SetVideoCache(cached, 0)
-
-                search_for_node(cached, input_clip, 0)
-
-                return cached
+        if nam is None:
+            self.tunables_names += [f"{len(self.tunables)}"] * len(v)
         else:
-            assert False
-            return lm(input_clip, v)
+            assert len(nam) == len(v)
+            self.tunables_names += [nam]
 
 
-def search_for_node(current: vs.VideoNode, to_search: vs.VideoNode, dpth, kp=[]):
-    disab = False
-    # pad = " " * dpth
-    lst = list(current._dependencies)
+        reta: vs.VideoNode
+        #rebuild tree everytime
+        if (not input_clip.is_inspectable(0)) and False:
+            def make_frameval(fna) -> vs.VideoNode:
+                def ina(n, b):
+                    try:
+                        return b()
+                    except:
+                        import traceback
+                        var = traceback.format_exc()
+                        print(var)
+                a = core.std.FrameEval(fna(), partial(ina, b=fna))
+                core.std.SetVideoCache(a, 0)
+                return a
 
-    # print(lst)
+            raw_frameeval = make_frameval(lambda a=input_clip, b=v, we=wrap_error: we(
+                a, lambda: lm(a, b).text.Text(f"{b}")))
 
-    for _, d in enumerate(lst):
-        kp += [d]
-        # print(pad,dpth,"dep[",i,"]",d, d._inputs)
-        if search_for_node(d, to_search, dpth + 1):
-            disab = True
-        if d == to_search:
-            disab = True
-    if disab:
-        # print("disable",current._name)
-        core.std.SetVideoCache(current, 0)
-    return disab
+            reta = raw_frameeval
+        else:
+            def cache_clips(n, a, b, lm, nam2, cache):
+                #print(f"{n} for {b} {nam2}")
+                b = tuple(b)
+                if not b in cache:
+                    rnd = wrap_error(a, lambda: lm(a, b))
+                    lel = rnd.text.Text(f"{b}        {nam2}               ")
+                    cache[b] = lel
+                return cache[b]
+            cache = {}
+            self.caches += [cache]
+            fanc = partial(cache_clips, a=input_clip, b=v, lm=lm, nam2=nam,cache=cache)
+            n0 = fanc(0)
+
+            cached = core.std.FrameEval(n0, fanc, clip_src=[input_clip])
+            #core.std.SetVideoCache(cached, 0)
+
+            reta = cached
+
+        self.tunables_nodes += [ (input_clip,reta) ]
+        return reta
+
+def wrap_error(nd, lmbda):
+    try:
+        return lmbda()
+    except:
+        import traceback
+        var = traceback.format_exc()
+        print(var)
+        return nd.std.BlankClip().text.Text(f"{var}")
+
+
+#cache clearning code
+#        visited = set()
+#        for a in self.tunables_nodes:
+#            set_caching_all_deps(a[0], [0, -1], visited)
+#            set_caching_all_deps(a[1], [0, -1], visited)
+#        for a in self.caches:
+#            for b in a.values():
+#                set_caching_all_deps(b, [0, -1], visited)
+#        for a in self.main.outputs.items:
+#            set_caching_all_deps(a.source.clip, [0,-1], visited)
+#            set_caching_all_deps(a.prepared.clip, [0, -1], visited)
+#            #if i <= self.main.current_output.index:
+#            #    a.render_frame(self.main.current_output.last_showed_frame)
+#def set_caching_all_deps(current: vs.VideoNode, mode, visited: set[int]):
+#    if hash(current) in visited:
+#        return
+#    if isinstance(mode,list):
+#        for a in mode:
+#            core.std.SetVideoCache(current, a)
+#    else:
+#        core.std.SetVideoCache(current, mode)
+#    for d in list(current._dependencies):
+#        set_caching_all_deps(d, mode,visited)
+#    visited.add(hash(current))
+#
+#def set_caching_between(current: vs.VideoNode, to_search: vs.VideoNode,mode:int):
+#    disab = False
+#    for d in list(current._dependencies):
+#        if d == to_search:
+#            disab = True
+#            continue
+#        if set_caching_between(d, to_search):
+#            disab = True
+#        
+#    if disab:
+#        core.std.SetVideoCache(current, mode)
+#
+#    return disab
