@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from vspreview.api.info import is_preview
 from vspreview.plugins import AbstractPlugin, PluginConfig
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget, QDoubleSpinBox, QCheckBox, QScrollArea
-from vspreview.core import HBoxLayout, VBoxLayout, FrameEdit, Stretch, main_window
+from vspreview.core import HBoxLayout, VBoxLayout, FrameEdit, Stretch, PushButton
 from functools import partial
 from vstools import vs, core
+from stgpytools import iterate
 
 __all__ = [
     'Tunables',
@@ -89,7 +89,7 @@ class Tunables(AbstractPlugin, QWidget):
 
         self.scroll = QScrollArea()
         self.widget = QWidget()
-        self.vbox = VBoxLayout(lst + [Stretch(0)])
+        self.vbox = VBoxLayout([ PushButton("Clear node cache",clicked=self.clear_node_cache)] + lst + [Stretch(0)])
 
         self.widget.setLayout(self.vbox)
 
@@ -102,10 +102,15 @@ class Tunables(AbstractPlugin, QWidget):
     
     def flush_all_caches(self):
         # Does not work
-        from vstools.utils.vs_proxy import clear_cache
+        #from vstools.utils.vs_proxy import clear_cache
+        #clear_cache()
         clear_cache()
 
         self.main.switch_frame(self.main.current_output.last_showed_frame)
+
+    def clear_node_cache(self):
+        for a in self.caches:
+            a.clear()
 
     def clear_tunables(self):
         self.tunables = []
@@ -124,9 +129,11 @@ class Tunables(AbstractPlugin, QWidget):
             assert len(nam) == len(v)
             self.tunables_names += [nam]
 
-
         reta: vs.VideoNode
+        #core.std.SetVideoCache(cached, 0)
+
         #rebuild tree everytime
+        #this would also need graph api enable for the case where you use cached nodes between tunables
         if (not input_clip.is_inspectable(0)) and False:
             def make_frameval(fna) -> vs.VideoNode:
                 def ina(n, b):
@@ -159,7 +166,6 @@ class Tunables(AbstractPlugin, QWidget):
             n0 = fanc(0)
 
             cached = core.std.FrameEval(n0, fanc, clip_src=[input_clip])
-            #core.std.SetVideoCache(cached, 0)
 
             reta = cached
 
@@ -175,6 +181,24 @@ def wrap_error(nd, lmbda):
         print(var)
         return nd.std.BlankClip().text.Text(f"{var}")
 
+def clear_cache() -> None:
+    cache_size = int(core.max_cache_size)
+
+    core.max_cache_size = 1
+
+    #take up memory with fixed size cache, that wont be free
+    fc = core.std.BlankClip(width=1024,height=1024,format=vs.GRAY8,length=15)
+    fc.std.SetVideoCache(1,fixedsize=len(fc))
+    list(fc.frames())
+
+    # force flush all other caches
+    list(iterate(fc, core.std.FlipHorizontal, 12).frames())
+
+    del fc
+    #call gc_freellist for good measure with the lower limit again
+    core.max_cache_size = 1
+
+    core.max_cache_size = cache_size
 
 #cache clearning code
 #        visited = set()

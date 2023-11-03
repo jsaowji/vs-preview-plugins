@@ -2,8 +2,7 @@
 symlink the .pys into your .vspreview/plugins as .ppy
 
 
-tunables needs patched vs-tools and helper in pythonpath
-https://gist.github.com/jsaowji/39e1e92e6291233b9c82b20cf744f85a
+For tunables it is advised to have the helper in pythonpath / site-packages
 
 example for tunables
 
