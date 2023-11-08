@@ -1,5 +1,5 @@
 from vstools import vs, core
-from typing import Callable
+from typing import Callable, cast
 
 __all__ = [
     'tunable',
@@ -16,9 +16,9 @@ def tunable(clip: vs.VideoNode, v: list[int | bool | float], nam: list[str], lm:
         return lm(clip, v)
 
     if is_preview():
-        return main_window().plugins["dev.jsaowji.tunables"].tunable(clip, v, nam, lm)
+        return cast(vs.VideoNode, main_window().plugins["dev.jsaowji.tunables"].tunable(clip, v, nam, lm)) # type: ignore
     else:
         return lm(clip, v)
 
-def seperator():
+def seperator() -> None:
     tunable(core.std.BlankClip(width=720, height=480), [0], ["----"], lambda a, b: a)

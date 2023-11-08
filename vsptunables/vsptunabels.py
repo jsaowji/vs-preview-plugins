@@ -4,9 +4,11 @@ from vspreview.plugins import AbstractPlugin, PluginConfig
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget, QDoubleSpinBox, QCheckBox, QScrollArea
-from vspreview.core import HBoxLayout, VBoxLayout, FrameEdit, Stretch, PushButton
+from vspreview.core import HBoxLayout, VBoxLayout, FrameEdit, Stretch, PushButton, Frame
+from vspreview.main import MainWindow
 from functools import partial
 from vstools import vs, core
+from typing import Callable, Any, Sequence
 from stgpytools import iterate
 
 __all__ = [
@@ -15,8 +17,12 @@ __all__ = [
 
 class Tunables(AbstractPlugin, QWidget):
     _config = PluginConfig('dev.jsaowji.tunables', 'Tunables')
+    tunables: list[list[int | bool | float]]
+    tunables_names: list[list[str]]
+    tunables_nodes: list[tuple[vs.VideoNode, vs.VideoNode]]
+    caches: list[dict[Any, Any]]
 
-    def __init__(self, main) -> None:
+    def __init__(self, main: MainWindow) -> None:
         super().__init__(main)
 
         self.clear_tunables()
@@ -29,138 +35,120 @@ class Tunables(AbstractPlugin, QWidget):
 
         self.update_list()
 
-    def reload_after(self):
+    def reload_after(self) -> None:
         QWidget().setLayout(self.layout())
         self.update_list()
 
-    def update_list(self):
+    def update_list(self) -> None:
         lst = []
         for tun, nam in zip(self.tunables, self.tunables_names):
             for i, a in enumerate(tun):
                 if isinstance(a, bool):
-                    fe = QCheckBox()
-                    fe.setChecked(a)
+                    fe1 = QCheckBox()
+                    fe1.setChecked(a)
 
-                    def asd(a, b, c, d:Tunables):
+                    def asd1(a: list[int | bool | float], b: int, c: QCheckBox, d: Tunables) -> None:
                         a[b] = c.isChecked()
 
                         d.flush_all_caches()
 
-                    fna = partial(asd, a=tun, b=i, c=fe, d=self)
-                    fe.stateChanged.connect(fna)
+                    fna = partial(asd1, a=tun, b=i, c=fe1, d=self)
+                    fe1.stateChanged.connect(fna)
                     lst += [HBoxLayout([
-                        QLabel(f"{nam[i]}"), fe
+                        QLabel(f"{nam[i]}"), fe1
                     ])]
                 elif isinstance(a, int):
-                    fe = FrameEdit()
-                    fe.setMinimum(-100000000)
-                    fe.setMaximum(100000000)
-                    fe.setValue(a)
+                    fe2 = FrameEdit()
+                    fe2.setMinimum(Frame(-100000000))
+                    fe2.setMaximum(Frame(100000000))
+                    fe2.setValue(Frame(a))
 
-                    def asd(a, b, c, d:Tunables):
+                    def asd2(a: list[int | bool | float], b: int, c: FrameEdit, d: Tunables) -> None:
                         a[b] = int(c.value())
 
                         d.flush_all_caches()
                
-                    fna = partial(asd, a=tun, b=i, c=fe, d=self)
-                    fe.valueChanged.connect(fna)
+                    fna = partial(asd2, a=tun, b=i, c=fe2, d=self)
+                    fe2.valueChanged.connect(fna)
                     lst += [HBoxLayout([
-                        QLabel(f"{nam[i]}"), fe
+                        QLabel(f"{nam[i]}"), fe2
                     ])]
                 elif isinstance(a, float):
-                    fe = QDoubleSpinBox()
-                    fe.setMinimum(-1.175494e38)
-                    fe.setMaximum(1.175494e38)
+                    fe3 = QDoubleSpinBox()
+                    fe3.setMinimum(-1.175494e38)
+                    fe3.setMaximum(1.175494e38)
 
-                    fe.setSingleStep(0.1)
-                    fe.setValue(a)
+                    fe3.setSingleStep(0.1)
+                    fe3.setValue(a)
 
-                    def asd(a, b, c, d:Tunables):
+                    def asd(a: list[int | bool | float], b: int, c: QDoubleSpinBox, d: Tunables) -> None:
                         a[b] = c.value()
 
                         d.flush_all_caches()                            
                         
 
-                    fna = partial(asd, a=tun, b=i, c=fe, d=self)
-                    fe.valueChanged.connect(fna)
+                    fna = partial(asd, a=tun, b=i, c=fe3, d=self)
+                    fe3.valueChanged.connect(fna)
                     lst += [HBoxLayout([
-                        QLabel(f"{nam[i]}"), fe
+                        QLabel(f"{nam[i]}"), fe3
                     ])]
 
-        self.scroll = QScrollArea()
+        self.scrolla = QScrollArea()
         self.widget = QWidget()
         self.vbox = VBoxLayout([ PushButton("Clear node cache",clicked=self.clear_node_cache)] + lst + [Stretch(0)])
 
         self.widget.setLayout(self.vbox)
 
-        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setWidget(self.widget)
+        self.scrolla.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) # type: ignore
+        self.scrolla.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # type: ignore
+        self.scrolla.setWidgetResizable(True)
+        self.scrolla.setWidget(self.widget)
 
-        VBoxLayout(self, [self.scroll])
+        VBoxLayout(self, [self.scrolla])
     
-    def flush_all_caches(self):
+    def flush_all_caches(self) -> None:
         # Does not work
         #from vstools.utils.vs_proxy import clear_cache
         #clear_cache()
+
         clear_cache()
 
         self.main.switch_frame(self.main.current_output.last_showed_frame)
 
-    def clear_node_cache(self):
+    def clear_node_cache(self) -> None:
         for a in self.caches:
             a.clear()
 
-    def clear_tunables(self):
+    def clear_tunables(self) -> None:
         self.tunables = []
         self.tunables_names = []
         self.tunables_nodes = []
         self.caches = []
 
-    def tunable(self, input_clip: vs.VideoNode, v: list[int | float | bool], nam: list[str], lm: callable[vs.VideoNode, list[int | float | bool]]) -> vs.VideoNode:
+    def tunable(self, input_clip: vs.VideoNode, v: list[int | float | bool], nam: list[str] | None, lm: Callable[[vs.VideoNode, Sequence[int | float | bool]], vs.VideoNode]) -> vs.VideoNode:
         assert isinstance(v,list)
         
         self.tunables += [v]
 
         if nam is None:
-            self.tunables_names += [f"{len(self.tunables)}"] * len(v)
+            nam = [f"{len(self.tunables)}"] * len(v)
         else:
             assert len(nam) == len(v)
-            self.tunables_names += [nam]
+        
+        self.tunables_names += [nam]
 
         reta: vs.VideoNode
-        #core.std.SetVideoCache(cached, 0)
 
-        #rebuild tree everytime
-        #this would also need graph api enable for the case where you use cached nodes between tunables
-        if (not input_clip.is_inspectable(0)) and False:
-            def make_frameval(fna) -> vs.VideoNode:
-                def ina(n, b):
-                    try:
-                        return b()
-                    except:
-                        import traceback
-                        var = traceback.format_exc()
-                        print(var)
-                a = core.std.FrameEval(fna(), partial(ina, b=fna))
-                core.std.SetVideoCache(a, 0)
-                return a
-
-            raw_frameeval = make_frameval(lambda a=input_clip, b=v, we=wrap_error: we(
-                a, lambda: lm(a, b).text.Text(f"{b}")))
-
-            reta = raw_frameeval
-        else:
-            def cache_clips(n, a, b, lm, nam2, cache):
+        if True:
+            def cache_clips(n:int, a: vs.VideoNode, b: list[int | float | bool], lm: Callable[[vs.VideoNode, Sequence[int | float | bool]], vs.VideoNode], nam2: list[str], cache: dict[Any, vs.VideoNode]) -> vs.VideoNode:
                 #print(f"{n} for {b} {nam2}")
-                b = tuple(b)
-                if not b in cache:
-                    rnd = wrap_error(a, lambda: lm(a, b))
-                    lel = rnd.text.Text(f"{b}        {nam2}               ")
-                    cache[b] = lel
-                return cache[b]
-            cache = {}
+                b2 = tuple(b)
+                if not b2 in cache:
+                    rnd = wrap_error(a, lambda: lm(a, b2))
+                    lel = rnd.text.Text(f"{b2}        {nam2}               ")
+                    cache[b2] = lel
+                return cache[b2]
+            cache: dict[Any, vs.VideoNode] = {}
             self.caches += [cache]
             fanc = partial(cache_clips, a=input_clip, b=v, lm=lm, nam2=nam,cache=cache)
             n0 = fanc(0)
@@ -172,14 +160,14 @@ class Tunables(AbstractPlugin, QWidget):
         self.tunables_nodes += [ (input_clip,reta) ]
         return reta
 
-def wrap_error(nd, lmbda):
+def wrap_error(format_node: vs.VideoNode, lmbda: Callable[[], vs.VideoNode]) -> vs.VideoNode:
     try:
         return lmbda()
     except:
         import traceback
         var = traceback.format_exc()
         print(var)
-        return nd.std.BlankClip().text.Text(f"{var}")
+        return format_node.std.BlankClip().text.Text(f"{var}")
 
 def clear_cache() -> None:
     cache_size = int(core.max_cache_size)
@@ -199,6 +187,28 @@ def clear_cache() -> None:
     core.max_cache_size = 1
 
     core.max_cache_size = cache_size
+
+
+        #core.std.SetVideoCache(cached, 0)
+
+        #rebuild tree everytime
+        #this would also need graph api enable for the case where you use cached nodes between tunables
+        #if (not input_clip.is_inspectable(0)) and False:
+        #    def make_frameval(fna) -> vs.VideoNode:
+        #        def ina(n, b):
+        #            try:
+        #                return b()
+        #            except:
+        #                import traceback
+        #                var = traceback.format_exc()
+        #                print(var)
+        #        a = core.std.FrameEval(fna(), partial(ina, b=fna))
+        #        core.std.SetVideoCache(a, 0)
+        #        return a
+        #    raw_frameeval = make_frameval(lambda a=input_clip, b=v, we=wrap_error: we(
+        #        a, lambda: lm(a, b).text.Text(f"{b}")))
+        #    reta = raw_frameeval
+        #else:
 
 #cache clearning code
 #        visited = set()

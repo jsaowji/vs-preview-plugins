@@ -115,7 +115,7 @@ class DVDPreview(AbstractPlugin, QWidget):
         except:
             self.title = None
             return
-        self.add_output(self.title.video())
+        self.add_output(self.title.video)
 
         self.status.setText(str(self.iso) + "\n\n" + str(self.title))
 
