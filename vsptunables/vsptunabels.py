@@ -107,11 +107,7 @@ class Tunables(AbstractPlugin, QWidget):
         VBoxLayout(self, [self.scrolla])
     
     def flush_all_caches(self) -> None:
-        # Does not work
-        #from vstools.utils.vs_proxy import clear_cache
-        #clear_cache()
-
-        clear_cache()
+        core.clear_cache()
 
         self.main.switch_frame(self.main.current_output.last_showed_frame)
 
@@ -168,83 +164,3 @@ def wrap_error(format_node: vs.VideoNode, lmbda: Callable[[], vs.VideoNode]) -> 
         var = traceback.format_exc()
         print(var)
         return format_node.std.BlankClip().text.Text(f"{var}")
-
-def clear_cache() -> None:
-    cache_size = int(core.max_cache_size)
-
-    core.max_cache_size = 1
-
-    #take up memory with fixed size cache, that wont be free
-    fc = core.std.BlankClip(width=1024,height=1024,format=vs.GRAY8,length=15)
-    fc.std.SetVideoCache(1,fixedsize=len(fc))
-    list(fc.frames())
-
-    # force flush all other caches
-    list(iterate(fc, core.std.FlipHorizontal, 12).frames())
-
-    del fc
-    #call gc_freellist for good measure with the lower limit again
-    core.max_cache_size = 1
-
-    core.max_cache_size = cache_size
-
-
-        #core.std.SetVideoCache(cached, 0)
-
-        #rebuild tree everytime
-        #this would also need graph api enable for the case where you use cached nodes between tunables
-        #if (not input_clip.is_inspectable(0)) and False:
-        #    def make_frameval(fna) -> vs.VideoNode:
-        #        def ina(n, b):
-        #            try:
-        #                return b()
-        #            except:
-        #                import traceback
-        #                var = traceback.format_exc()
-        #                print(var)
-        #        a = core.std.FrameEval(fna(), partial(ina, b=fna))
-        #        core.std.SetVideoCache(a, 0)
-        #        return a
-        #    raw_frameeval = make_frameval(lambda a=input_clip, b=v, we=wrap_error: we(
-        #        a, lambda: lm(a, b).text.Text(f"{b}")))
-        #    reta = raw_frameeval
-        #else:
-
-#cache clearning code
-#        visited = set()
-#        for a in self.tunables_nodes:
-#            set_caching_all_deps(a[0], [0, -1], visited)
-#            set_caching_all_deps(a[1], [0, -1], visited)
-#        for a in self.caches:
-#            for b in a.values():
-#                set_caching_all_deps(b, [0, -1], visited)
-#        for a in self.main.outputs.items:
-#            set_caching_all_deps(a.source.clip, [0,-1], visited)
-#            set_caching_all_deps(a.prepared.clip, [0, -1], visited)
-#            #if i <= self.main.current_output.index:
-#            #    a.render_frame(self.main.current_output.last_showed_frame)
-#def set_caching_all_deps(current: vs.VideoNode, mode, visited: set[int]):
-#    if hash(current) in visited:
-#        return
-#    if isinstance(mode,list):
-#        for a in mode:
-#            core.std.SetVideoCache(current, a)
-#    else:
-#        core.std.SetVideoCache(current, mode)
-#    for d in list(current._dependencies):
-#        set_caching_all_deps(d, mode,visited)
-#    visited.add(hash(current))
-#
-#def set_caching_between(current: vs.VideoNode, to_search: vs.VideoNode,mode:int):
-#    disab = False
-#    for d in list(current._dependencies):
-#        if d == to_search:
-#            disab = True
-#            continue
-#        if set_caching_between(d, to_search):
-#            disab = True
-#        
-#    if disab:
-#        core.std.SetVideoCache(current, mode)
-#
-#    return disab

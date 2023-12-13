@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget, QLineEdit, QTextEdit
 from vspreview.core import Frame, HBoxLayout, VBoxLayout, PushButton, FrameEdit, Notches, CheckBox
 from vspreview.plugins import AbstractPlugin, PluginConfig
-from vssource import IsoFile
+from vssource import IsoFile, Title
 
 __all__ = [
     'DVDPreview'
@@ -14,6 +14,9 @@ __all__ = [
 
 class DVDPreview(AbstractPlugin, QWidget):
     _config = PluginConfig('dev.jsaowji.dvdpreviewplugin', 'DVDPreview')
+
+    title: Title
+    iso: IsoFile
 
     def setup_ui(self) -> None:
         self.setAcceptDrops(True)
@@ -78,13 +81,13 @@ class DVDPreview(AbstractPlugin, QWidget):
             self.audio_offset_label
         ])
 
-    def btn_split_renderwav_clicked(self):
+    def btn_split_renderwav_clicked(self) -> None:
         fromy, toy, audioy = self.split_from.value().value, self.split_to.value().value, self.split_audio_idx.value().value
         splt = self.title.split_range(fromy, toy, audioy)
         import vsmuxtools
         vsmuxtools.audio_async_render(splt.audio, open(self.split_audio_path.text(), "wb"))
 
-    def btn_split_demux_ac3_clicked(self):
+    def btn_split_demux_ac3_clicked(self)  -> None:
         fromy, toy, audioy = self.split_from.value().value, self.split_to.value().value, self.split_audio_idx.value().value
         if self.title._audios[audioy].startswith("ac3"):
             splt = self.title.split_range(fromy, toy, audioy)
@@ -92,27 +95,30 @@ class DVDPreview(AbstractPlugin, QWidget):
             offst = round(offst * 1000 * 10) / 10
             self.audio_offset_label.setText(f"Offset: {offst} ms")
 
-    def dvd_open(self):
+    def dvd_open(self)  -> None:
         try:
             self.iso = IsoFile(self.dvdpath.text())
             self.status.setText(str(self.iso))
             self.title_num.setMinimum(1)
             self.title_num.setMaximum(self.iso.title_count)
             self.angle_num.setMinimum(1)
-        except:
+        except Exception as e:
+            print(e)
             self.iso = None
 
-    def dvd_save_json(self):
+
+    def dvd_save_json(self)  -> None:
         try:
             import json
             json.dump(self.iso.json, open(self.split_audio_path.text(), "wt"))
         except:
             pass
 
-    def dvd_title(self):
+    def dvd_title(self)  -> None:
         try:
-            self.title = self.iso.get_title(int(self.title_num.value()), angle_nr=int(self.angle_num.value()))
-        except:
+            self.title = self.iso.get_title(int(self.title_num.value()), angle_idx=int(self.angle_num.value()))
+        except Exception as e:
+            print(e)
             self.title = None
             return
         self.add_output(self.title.video)
@@ -138,7 +144,7 @@ class DVDPreview(AbstractPlugin, QWidget):
                     self.update_notches()
                     break
 
-    def add_output(self, new_node):
+    def add_output(self, new_node) -> None:
         prevnode = self.main.outputs[self.main.current_output.index].with_node(new_node)
 
         self.main.outputs.items.append(prevnode)
@@ -150,7 +156,7 @@ class DVDPreview(AbstractPlugin, QWidget):
         self.update_notches()
         self.main.switch_output(idxx)
 
-    def update_notches(self):
+    def update_notches(self) -> None:
         self.main.timeline.update_notches(self)
 
     def get_notches(self) -> Notches:
@@ -179,13 +185,13 @@ class DVDPreview(AbstractPlugin, QWidget):
 
         return nchs
 
-    def dragEnterEvent(self, event):
+    def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls():
             event.accept()
         else:
             event.ignore()
 
-    def dropEvent(self, event):
+    def dropEvent(self, event) -> None:
         files = [u.toLocalFile() for u in event.mimeData().urls()]
         for f in files:
             try:
